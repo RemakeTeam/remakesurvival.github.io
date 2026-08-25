@@ -1,0 +1,15 @@
+html,
+body,
+#out {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+html {
+    background: #0A0B0D;
+}
+body {
+    overflow: hidden;
+    background: #0A0B0D;
+}
