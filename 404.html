@@ -443,17 +443,19 @@
         load("confirm", "./sounds/confirm.wav");
         document.querySelectorAll(".button").forEach(button =>
         {
-            button.addEventListener("click", () =>
+            button.addEventListener("pointerdown", () =>
             {
                 play(button.classList.contains("confirm") ? "confirm" : "tap");
             });
         });
         document.querySelectorAll(".footer-link").forEach(link =>
         {
-            link.addEventListener("click", event =>
+            link.addEventListener("pointerdown", () =>
             {
-                event.preventDefault();
                 play("tap");
+            });
+            link.addEventListener("click", () =>
+            {
                 openUrl(link.dataset.url);
             });
         });
