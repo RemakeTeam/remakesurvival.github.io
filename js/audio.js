@@ -12,10 +12,7 @@ export function play(name)
     const audio = sounds[name];
     if (!audio) return;
     audio.currentTime = 0;
-    audio.play().catch(error =>
-    {
-        console.warn("Audio playback failed:", error);
-    });
+    audio.play();
 }
 
 export function stop(name)
