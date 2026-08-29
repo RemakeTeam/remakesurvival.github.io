@@ -13,3 +13,7 @@ export function navigate(path) {
 export function setTitle(title) {
     document.title = title;
 }
+
+export function hideLoadingScreen() {
+    document.getElementById("loading-screen").remove();
+}
