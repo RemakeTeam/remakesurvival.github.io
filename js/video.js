@@ -1,188 +1,131 @@
-// The value Avalonia gets back from create() is a *container* div wrapping the real
-// <video> element (as container.videoElement), not the <video> itself. That lets us
-// also host a native mute/unmute button positioned over the video — a plain Avalonia
-// control drawn "on top" wouldn't actually be visible, since NativeControlHost content
-// always renders above regular Avalonia content (the "airspace" problem). Every other
-// function here takes that same container and reaches into .videoElement as needed.
+// Video frame source: decodes a video and exposes captured RGBA frames for
+// Avalonia to draw as an ordinary bitmap (VideoView copies these into a
+// WriteableBitmap) instead of showing the <video> element itself. This
+// sidesteps the native-DOM "airspace" problem entirely — a native <video>
+// element always renders above regular Avalonia content, no matter what
+// z-order/clipping is set on it. Once video is just pixel data, it's normal
+// Avalonia content: normal z-order (other controls can sit on top with zero
+// extra code), normal clipping by an ancestor Border/ScrollViewer, normal
+// Border rounding/outline. No workarounds needed.
+
+const canvas = document.createElement("canvas");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
 export function create()
 {
-    const container = document.createElement("div");
-    container.style.position = "relative";
-    container.style.width = "100%";
-    container.style.height = "100%";
-    container.style.overflow = "hidden";
-    container.style.border = "1px solid rgba(128, 22, 190, 0.35)";
-    // Let clicks/hover fall straight through to whatever Avalonia renders
-    // underneath (see the note on the video below) — the mute button re-enables
-    // pointer events for just itself further down.
-    container.style.pointerEvents = "none";
-
     const video = document.createElement("video");
     video.preload = "auto";
     video.playsInline = true;
-    video.style.display = "block";
-    video.style.width = "100%";
-    video.style.height = "100%";
-    video.style.margin = "0";
-    video.style.padding = "0";
-    video.style.border = "0";
-    video.style.background = "transparent";
-    // The video has no controls of its own and never needs to be clicked/hovered
-    // itself. Excluding it from hit-testing lets pointer events fall straight
-    // through to whatever Avalonia renders underneath, which is what actually
-    // owns correct hit-testing/hover for the rest of the page. Without this,
-    // mousemove events landing on this native element get picked up by
-    // Avalonia's own pointer tracking with a wrong Y (X stays correct), which
-    // was misfiring hover highlights on the header nav while hovering the video.
-    video.style.pointerEvents = "none";
-    container.appendChild(video);
-    container.videoElement = video;
-
-    const muteButton = document.createElement("button");
-    muteButton.type = "button";
-    Object.assign(muteButton.style, {
+    // Browsers require a video to already be muted for unprompted autoplay to
+    // be allowed at all; setMuted (called right after this, with the real
+    // initial value) can then un-mute it if asked to.
+    video.muted = true;
+    // Some browsers throttle or never actually decode a <video> that's fully
+    // detached from the document, even though nothing here displays it — so it
+    // still needs to be in the DOM. Keep it at a normal (non-degenerate) size
+    // rather than 1x1/opacity:0 too: some browsers apply extra throttling to
+    // near-zero-size or fully-transparent video elements specifically, on the
+    // assumption nothing is actually looking at them — shove it off-screen
+    // instead, which doesn't trip that heuristic.
+    Object.assign(video.style, {
         position: "absolute",
-        top: "16px",
-        right: "16px",
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        padding: "10px 18px",
-        borderRadius: "999px",
-        border: "none",
-        background: "rgba(15, 13, 17, 0.68)",
-        color: "#ffffff",
-        fontFamily: "inherit",
-        fontSize: "13px",
-        fontWeight: "600",
-        lineHeight: "1",
-        cursor: "pointer",
-        pointerEvents: "auto"
+        top: "0",
+        left: "-9999px",
+        pointerEvents: "none"
     });
-
-    const icon = document.createElement("span");
-    const label = document.createElement("span");
-    muteButton.appendChild(icon);
-    muteButton.appendChild(label);
-
-    const refreshMuteButton = () =>
-    {
-        const muted = video.muted;
-        icon.textContent = muted ? "🔇" : "🔊";
-        label.textContent = muted ? "Включить звук" : "Выключить звук";
-    };
-
-    const toggleMute = (e) =>
-    {
-        // Avalonia.Browser installs its own global, capture-phase pointer
-        // listeners to drive its synthetic input pipeline, and appears to call
-        // preventDefault() on pointerdown regardless of the actual DOM target —
-        // which also suppresses the browser's derived "click" event entirely, so
-        // a plain click listener here never fires. Handling pointerdown directly
-        // (and stopping it from propagating any further) sidesteps that.
-        e.preventDefault();
-        e.stopPropagation();
-        video.muted = !video.muted;
-        refreshMuteButton();
-    };
-    muteButton.addEventListener("pointerdown", toggleMute);
-    video.addEventListener("volumechange", refreshMuteButton);
-    refreshMuteButton();
-
-    container.appendChild(muteButton);
-    container.refreshMuteButton = refreshMuteButton;
-    return container;
+    document.body.appendChild(video);
+    return video;
 }
 
-export function setSource(container, source)
+export function setSource(video, source)
 {
-    const video = container.videoElement;
     const value = source ?? "";
     if (video.getAttribute("src") === value) return;
     video.setAttribute("src", value);
 }
 
-export function destroy(container)
+export function destroy(video)
 {
-    const video = container.videoElement;
     video.pause();
     video.removeAttribute("src");
     video.load();
+    video.remove();
 }
 
-export function setAutoPlay(container, value)
+export function setAutoPlay(video, value)
 {
-    container.videoElement.autoplay = value;
+    video.autoplay = value;
 }
 
-export function setLoop(container, value)
+export function setLoop(video, value)
 {
-    container.videoElement.loop = value;
+    video.loop = value;
 }
 
-export function setMuted(container, value)
+export function setMuted(video, value)
 {
-    container.videoElement.muted = value;
-    // The "volumechange" listener normally keeps the mute button's icon/label in
-    // sync, but don't rely on it firing for a programmatic change on an element
-    // that isn't attached to the DOM yet (Create() sets the initial Muted value
-    // before the element is inserted) — refresh explicitly too.
-    if (container.refreshMuteButton) container.refreshMuteButton();
+    video.muted = value;
 }
 
-export function setVolume(container, value)
+export function setVolume(video, value)
 {
-    container.videoElement.volume = Math.max(0, Math.min(1, value));
+    video.volume = Math.max(0, Math.min(1, value));
 }
 
-export function setObjectFit(container, value)
+export function getWidth(video)
 {
-    container.videoElement.style.objectFit = value;
+    return video.videoWidth || 0;
 }
 
-export function setCornerRadius(container, topLeft, topRight, bottomRight, bottomLeft)
+export function getHeight(video)
 {
-    // A wrapping Border's CornerRadius/ClipToBounds can't round this element —
-    // it's real native DOM content (the "airspace" problem), not something
-    // Avalonia's own clipping applies to — so it has to be rounded directly.
-    // Rounding (and clipping via overflow:hidden) the container, not just the
-    // video, keeps the mute button's corner from poking out past the curve too.
-    container.style.borderRadius = `${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`;
+    return video.videoHeight || 0;
 }
 
-export function setTopClip(container, pixels)
+export function captureFrame(video, buffer, width, height)
 {
-    // NativeControlHost content always renders above regular Avalonia content
-    // (the "airspace" problem) and isn't reliably clipped by an ancestor
-    // ScrollViewer, so it can visually cover — and swallow clicks meant for —
-    // controls that are supposed to sit above it, like the header nav.
-    // Clipping just the overlapping top sliver (rather than hiding the whole
-    // element) keeps the rest of the video showing normally, and clipped-away
-    // pixels also fall out of hit-testing in modern browsers.
-    const value = Math.max(0, pixels || 0);
-    container.style.clipPath = value > 0 ? `inset(${value}px 0 0 0)` : "";
+    // readyState < 2 (HAVE_CURRENT_DATA) means there's no decoded frame yet.
+    if (video.readyState < 2 || width <= 0 || height <= 0) return false;
+    try
+    {
+        if (canvas.width !== width) canvas.width = width;
+        if (canvas.height !== height) canvas.height = height;
+        ctx.drawImage(video, 0, 0, width, height);
+        const frame = ctx.getImageData(0, 0, width, height);
+        // frame.data is a Uint8ClampedArray — the marshalled buffer's own
+        // .set() strictly requires a real Uint8Array, so wrap (not copy) it as
+        // one: same underlying bytes, just a different typed-array view.
+        buffer.set(new Uint8Array(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength));
+        return true;
+    }
+    catch (e)
+    {
+        // Surface this instead of silently producing a blank frame forever —
+        // a tainted canvas (cross-origin video without CORS) throws here, for
+        // example, and would otherwise be very hard to notice from the C# side.
+        console.error("[VideoView] captureFrame failed:", e);
+        return false;
+    }
 }
 
-export function play(container)
+export function play(video)
 {
-    const promise = container.videoElement.play();
+    const promise = video.play();
     if (promise) promise.catch(() => {});
 }
 
-export function pause(container)
+export function pause(video)
 {
-    container.videoElement.pause();
+    video.pause();
 }
 
-export function stop(container)
+export function stop(video)
 {
-    const video = container.videoElement;
     video.pause();
     video.currentTime = 0;
 }
 
-export function seek(container, seconds)
+export function seek(video, seconds)
 {
-    if (Number.isFinite(seconds)) container.videoElement.currentTime = Math.max(0, seconds);
+    if (Number.isFinite(seconds)) video.currentTime = Math.max(0, seconds);
 }
