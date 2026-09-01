@@ -1,13 +1,3 @@
-// Video frame source: decodes a video and exposes captured RGBA frames for
-// Avalonia to draw as an ordinary bitmap (VideoView copies these into a
-// WriteableBitmap) instead of showing the <video> element itself. This
-// sidesteps the native-DOM "airspace" problem entirely — a native <video>
-// element always renders above regular Avalonia content, no matter what
-// z-order/clipping is set on it. Once video is just pixel data, it's normal
-// Avalonia content: normal z-order (other controls can sit on top with zero
-// extra code), normal clipping by an ancestor Border/ScrollViewer, normal
-// Border rounding/outline. No workarounds needed.
-
 const canvas = document.createElement("canvas");
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
@@ -16,17 +6,7 @@ export function create()
     const video = document.createElement("video");
     video.preload = "auto";
     video.playsInline = true;
-    // Browsers require a video to already be muted for unprompted autoplay to
-    // be allowed at all; setMuted (called right after this, with the real
-    // initial value) can then un-mute it if asked to.
     video.muted = true;
-    // Some browsers throttle or never actually decode a <video> that's fully
-    // detached from the document, even though nothing here displays it — so it
-    // still needs to be in the DOM. Keep it at a normal (non-degenerate) size
-    // rather than 1x1/opacity:0 too: some browsers apply extra throttling to
-    // near-zero-size or fully-transparent video elements specifically, on the
-    // assumption nothing is actually looking at them — shove it off-screen
-    // instead, which doesn't trip that heuristic.
     Object.assign(video.style, {
         position: "absolute",
         top: "0",
@@ -34,6 +14,46 @@ export function create()
         pointerEvents: "none"
     });
     document.body.appendChild(video);
+    video.addEventListener("error", () => console.error("[VideoView] error:", video.error));
+    video.addEventListener("stalled", () => console.warn("[VideoView] stalled (network idle while still waiting for data)"));
+    video.addEventListener("waiting", () => console.warn("[VideoView] waiting (buffering, playback paused)"));
+    video.addEventListener("playing", () => console.log("[VideoView] playing (resumed after buffering, if any)"));
+    video.addEventListener("progress", () =>
+    {
+        const buffered = video.buffered.length ? video.buffered.end(video.buffered.length - 1) : 0;
+        console.log(`[VideoView] progress: buffered ${buffered.toFixed(1)}s / duration ${video.duration || "?"}s, readyState=${video.readyState}, networkState=${video.networkState}`);
+    });
+    const STALL_TIMEOUT_MS = 8000;
+    let lastProgressTime = video.currentTime;
+    let lastProgressAt = Date.now();
+    video.addEventListener("timeupdate", () =>
+    {
+        if (video.currentTime !== lastProgressTime)
+        {
+            lastProgressTime = video.currentTime;
+            lastProgressAt = Date.now();
+        }
+    });
+    const watchdog = setInterval(() =>
+    {
+        if (video.ended || !video.getAttribute("src")) return;
+        if (video.paused)
+        {
+            if (video.autoplay)
+            {
+                const p = video.play();
+                if (p) p.catch(() => {});
+            }
+            return;
+        }
+        if (Date.now() - lastProgressAt < STALL_TIMEOUT_MS) return;
+        console.warn(`[VideoView] no playback progress for ${STALL_TIMEOUT_MS}ms — reloading to recover from a stall`);
+        lastProgressAt = Date.now();
+        video.load();
+        const p = video.play();
+        if (p) p.catch(() => {});
+    }, 3000);
+    video._stallWatchdog = watchdog;
     return video;
 }
 
@@ -42,10 +62,16 @@ export function setSource(video, source)
     const value = source ?? "";
     if (video.getAttribute("src") === value) return;
     video.setAttribute("src", value);
+    if (value && video.autoplay)
+    {
+        const p = video.play();
+        if (p) p.catch(() => {});
+    }
 }
 
 export function destroy(video)
 {
+    if (video._stallWatchdog) clearInterval(video._stallWatchdog);
     video.pause();
     video.removeAttribute("src");
     video.load();
@@ -84,7 +110,6 @@ export function getHeight(video)
 
 export function captureFrame(video, buffer, width, height)
 {
-    // readyState < 2 (HAVE_CURRENT_DATA) means there's no decoded frame yet.
     if (video.readyState < 2 || width <= 0 || height <= 0) return false;
     try
     {
@@ -92,17 +117,11 @@ export function captureFrame(video, buffer, width, height)
         if (canvas.height !== height) canvas.height = height;
         ctx.drawImage(video, 0, 0, width, height);
         const frame = ctx.getImageData(0, 0, width, height);
-        // frame.data is a Uint8ClampedArray — the marshalled buffer's own
-        // .set() strictly requires a real Uint8Array, so wrap (not copy) it as
-        // one: same underlying bytes, just a different typed-array view.
         buffer.set(new Uint8Array(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength));
         return true;
     }
     catch (e)
     {
-        // Surface this instead of silently producing a blank frame forever —
-        // a tainted canvas (cross-origin video without CORS) throws here, for
-        // example, and would otherwise be very hard to notice from the C# side.
         console.error("[VideoView] captureFrame failed:", e);
         return false;
     }
