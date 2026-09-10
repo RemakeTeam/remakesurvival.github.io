@@ -39,7 +39,7 @@ export function create()
         if (video.ended || !video.getAttribute("src")) return;
         if (video.paused)
         {
-            if (video.autoplay)
+            if (video.autoplay && !video._manuallyPaused)
             {
                 const p = video.play();
                 if (p) p.catch(() => {});
@@ -129,17 +129,20 @@ export function captureFrame(video, buffer, width, height)
 
 export function play(video)
 {
+    video._manuallyPaused = false;
     const promise = video.play();
     if (promise) promise.catch(() => {});
 }
 
 export function pause(video)
 {
+    video._manuallyPaused = true;
     video.pause();
 }
 
 export function stop(video)
 {
+    video._manuallyPaused = true;
     video.pause();
     video.currentTime = 0;
 }
