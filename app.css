@@ -184,3 +184,17 @@ body {
         margin-top: 45px;
     }
 }
+
+.version {
+    margin-top: 22px;
+
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 2px;
+
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.version span {
+    color: #B991F5;
+}

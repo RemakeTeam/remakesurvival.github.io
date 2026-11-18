@@ -54,12 +54,45 @@
                     <span class="platform">ANDROID</span>
                     <span class="file-type">Скачать игру (.apk)</span>
                 </a>
-
+            </div>
+            <div class="version">
+                VERSION <span id="game-version">Загрузка...</span>
             </div>
             <p class="footer-text">
                 © 2026 Remake Survival
             </p>
         </div>
     </main>
+    <script>
+    async function loadGameVersion() {
+        const versionElement = document.getElementById("game-version");
+
+        try {
+            const response = await fetch(
+                "https://auth.remake-survival.site/api/system",
+                { cache: "no-store" }
+            );
+
+            if (!response.ok) {
+                throw new Error("API request failed");
+            }
+
+            const data = await response.json();
+
+            if (!data.version) {
+                throw new Error("Version not found");
+            }
+
+            versionElement.textContent = data.version;
+
+        } catch (error) {
+            console.error("Failed to load game version:", error);
+
+            versionElement.textContent = "Недоступна";
+        }
+    }
+
+    loadGameVersion();
+    </script>
 </body>
 </html>
