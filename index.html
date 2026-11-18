@@ -29,28 +29,18 @@
 </head>
 <body>
     <main class="hero">
-
         <div class="background"></div>
         <div class="overlay"></div>
         <div class="content">
-            <img
-                src="./images/logo.png"
-                alt="Remake Survival"
-                class="logo"
-            >
-            <p class="subtitle">
-                ВЫЖИВАНИЕ НАЧИНАЕТСЯ ЗДЕСЬ
-            </p>
-            <p class="description">
-                Стройте базы, добывайте ресурсы,
-                исследуйте мир и выживайте.
-            </p>
+            <img src="./images/logo.png" alt="Remake Survival" class="logo">
+            <p class="subtitle">ВЫЖИВАНИЕ НАЧИНАЕТСЯ ЗДЕСЬ</p>
+            <p class="description">Стройте базы, добывайте ресурсы, исследуйте мир и выживайте.</p>
             <div class="download-buttons">
-                <a href="https://github.com/RemakeTeam/remakesurvival.github.io/releases/download/Latest/Remake.Survival.Windows.zip" class="download-button">
+                <a id="windows-download" href="#" class="download-button is-disabled" aria-disabled="true">
                     <span class="platform">WINDOWS</span>
                     <span class="file-type">Скачать игру (.zip)</span>
                 </a>
-                <a href="https://github.com/RemakeTeam/remakesurvival.github.io/releases/download/Latest/Remake.Survival.apk" class="download-button">
+                <a id="android-download" href="#" class="download-button is-disabled" aria-disabled="true">
                     <span class="platform">ANDROID</span>
                     <span class="file-type">Скачать игру (.apk)</span>
                 </a>
@@ -58,41 +48,12 @@
             <div class="version">
                 ВЕРСИЯ <span id="game-version">Загрузка...</span>
             </div>
+            <div id="maintenance-status" class="maintenance-status"></div>
             <p class="footer-text">
                 © 2026 Remake Survival
             </p>
         </div>
     </main>
-    <script>
-    async function loadGameVersion() {
-        const versionElement = document.getElementById("game-version");
-
-        try {
-            const response = await fetch(
-                "https://auth.remake-survival.site/api/system",
-                { cache: "no-store" }
-            );
-
-            if (!response.ok) {
-                throw new Error("API request failed");
-            }
-
-            const data = await response.json();
-
-            if (!data.version) {
-                throw new Error("Version not found");
-            }
-
-            versionElement.textContent = data.version;
-
-        } catch (error) {
-            console.error("Failed to load game version:", error);
-
-            versionElement.textContent = "Недоступна";
-        }
-    }
-
-    loadGameVersion();
-    </script>
+    <script src="./app.js"></script>
 </body>
 </html>

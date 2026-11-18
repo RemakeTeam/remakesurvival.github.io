@@ -198,3 +198,31 @@ body {
 .version span {
     color: #B991F5;
 }
+
+
+.is-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+    filter: grayscale(0.5);
+}
+
+.maintenance-status {
+    display: none;
+
+    margin-top: 18px;
+    padding: 10px 18px;
+
+    color: #D9B8FF;
+    background: rgba(137, 69, 228, 0.15);
+
+    border: 1px solid rgba(137, 69, 228, 0.4);
+    border-radius: 6px;
+
+    font-size: 13px;
+    text-align: center;
+}
+
+.maintenance-status.visible {
+    display: block;
+}
